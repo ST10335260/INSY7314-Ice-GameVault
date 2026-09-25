@@ -1,0 +1,49 @@
+# GameVault: MongoDB + API + React frontend
+#   cp .env.example .env   (then edit it)
+#   docker compose up --build
+#   docker compose exec backend npm run seed
+# Open http://localhost:8080
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    # Not published to the host: only the backend can reach the database
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017/gamevault
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRES_IN_SECONDS: 3600
+      CLIENT_ORIGIN: http://localhost:8080
+      # Local compose runs over plain HTTP. Set to true when deployed behind HTTPS.
+      COOKIE_SECURE: "false"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@gamevault.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      LOG_LEVEL: info
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
